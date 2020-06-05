@@ -15,6 +15,7 @@ use Exporter qw(import);
 our @EXPORT = qw(dd);
 our @EXPORT_OK = qw(dump);
 
+use Role::Tiny::With;
 
 use Scalar::Util qw(looks_like_number blessed reftype refaddr);
 
@@ -22,11 +23,18 @@ sub new {
     my $class = shift;
     my %opts = @_;
 
-    # set defaults for options
-    $opts{perl_version}   //= "5.010";
-    $opts{remove_pragmas} //= 0;
+    my $self = bless \%opts, $class;
 
-    bless \%opts, $class;
+    # we give a chance to users to use other roles, but if they don't then we
+    # mix the defaults
+    with 'Data::Bahe::ColorTheme::Default' unless $self->can('get_color');
+    with 'Data::Bahe::ForTerm' unless $self->can('colorize');
+
+    # set defaults for options
+    $self->{perl_version}   //= "5.010";
+    $self->{remove_pragmas} //= 0;
+
+    $self;
 }
 
 my %esc = (
@@ -92,7 +100,7 @@ sub dump_value {
     my $ref = ref($val);
     if ($ref eq '') {
         if (!defined($val)) {
-            return "undef";
+            return $self->colorize($r, "undef", "data_undef");
         } elsif (looks_like_number($val)) {
             return $val;
         } else {
@@ -155,25 +163,38 @@ sub dump_value {
     $res;
 }
 
-sub do_dump {
+sub dump_list {
+    my $self = shift;
+    my $r = shift;
+    join(
+        "",
+        $self->colorize($r, "(", "token_paren"),
+        join(
+            $self->colorize($r, ", ", "token_comma"),
+            map { $self->dump_value($r, $_, '') } @_,
+        ),
+        $self->colorize($r, ")", "token_paren"),
+    );
+}
+
+sub DUMP {
     my $self = shift;
 
     # this is the stash (hash) variable that stores states during dumping, and
-    # is passed around between the methods.
+    # is passed around between the dump_* methods.
     my $r = {
         seen_refaddrs => {},
         subscripts => {},
         fixups => [],
     };
 
-
     my $res;
     if (@_ > 1) {
-        $res = "(" . join(", ", map {$self->dump_value($r, $_, '')} @_) . ")";
+        $res = $self->dump_list($r, @_);
     } elsif (@_ == 1) {
         $res = $self->dump_value($r, $_[0], '');
     } else {
-        $res = undef;
+        $res = "";
     }
 
     if (@{ $r->{fixups} }) {
@@ -190,7 +211,7 @@ sub dump {
         $opts = JSON::MaybeXS::decode_json($ENV{PERL_BAHE_OPTS});
     }
     my $bahe = __PACKAGE__->new(%$opts);
-    $bahe->do_dump(@_);
+    $bahe->DUMP(@_);
 }
 
 # function
@@ -203,7 +224,7 @@ sub dd {
 1;
 # ABSTRACT: Pretty-printing of data structures
 
-=for Pod::Coverage ^(do_dump|dump_.+)$
+=for Pod::Coverage ^(DUMP|new|dump_.+)$
 
 =encoding utf8
 
@@ -232,7 +253,7 @@ OO interface:
  use Data::Bahe (); # if you don't want to import anything
 
  my $bahe = Data::Bahe->new(%opts);
- my $dump = $bahe->do_dump(@data);
+ my $dump = $bahe->DUMP(@data);
 
 
 =head1 DESCRIPTION
