@@ -1,11 +1,20 @@
+## no critic: (Modules::ProhibitAutomaticExportation)
+
 package Data::Bahe;
 
+# AUTHORITY
 # DATE
+# DIST
 # VERSION
 
 use 5.010001;
 use strict;
 use warnings;
+
+use Exporter qw(import);
+our @EXPORT = qw(dd);
+our @EXPORT_OK = qw(dump);
+
 
 use Scalar::Util qw(looks_like_number blessed reftype refaddr);
 
@@ -146,7 +155,7 @@ sub dump_value {
     $res;
 }
 
-sub dump {
+sub do_dump {
     my $self = shift;
 
     # this is the stash (hash) variable that stores states during dumping, and
@@ -156,6 +165,7 @@ sub dump {
         subscripts => {},
         fixups => [],
     };
+
 
     my $res;
     if (@_ > 1) {
@@ -172,45 +182,72 @@ sub dump {
     $res;
 }
 
-sub pdump {
-    my $self = shift;
-    print $self->dump(@_);
+# function
+sub dump {
+    my $opts = {};
+    if (defined $ENV{PERL_BAHE_OPTS}) {
+        require JSON::MaybeXS;
+        $opts = JSON::MaybeXS::decode_json($ENV{PERL_BAHE_OPTS});
+    }
+    my $bahe = __PACKAGE__->new(%$opts);
+    $bahe->do_dump(@_);
+}
+
+# function
+sub dd {
+    my $dump = &dump(@_);
+    print $dump, ($dump =~ /\R\z/ ? "" : "\n");
     @_;
 }
 
 1;
 # ABSTRACT: Pretty-printing of data structures
 
-=for Pod::Coverage ^(dump_.+)$
+=for Pod::Coverage ^(do_dump|dump_.+)$
 
 =encoding utf8
 
 =head1 SYNOPSIS
 
- use Data::Bahe;
+Procedural interface:
+
+ use Data::Bahe; # exports dd(), can export dump()
+
+ # print dump of @data to STDOUT, with newline
+ dd @data;
+
+ # dd() can be inserted in the middle of expression because it returns the arguments.
+ @data = dd foo(@args);
+
+ sub bar {
+     ...
+     return dd [200,"OK",$baz];
+ }
+
+ # get the string dump of @data; you can just write dump() if you import it
+ my $dump = Data::Bahe::dump(@data);
+
+OO interface:
+
+ use Data::Bahe (); # if you don't want to import anything
 
  my $bahe = Data::Bahe->new(%opts);
-
- # return dumped data, print nothing
- my $dump = $bahe->dump(@data);
-
- # print dumped data, return the original
- $bahe->pdump(@data);
+ my $dump = $bahe->do_dump(@data);
 
 
 =head1 DESCRIPTION
 
-B<EARLY RELEASE, LOTS OF UNIMPLEMENTED STUFFS>.
+B<EARLY RELEASE, LOTS OF UNIMPLEMENTED STUFFS AND UNSTABLE API>.
 
 This class is "yet another data dumper". The focus is on flexibility and nice
 output (and not on speed). My goal is to be able to have features of
 L<Data::Dump> (like base64- and hex-encoding, ranges, formatting),
-L<Data::Dump::Color> (colors, comments to aid debugging) in a single codebase.
-It should also be flexible enough to be subclassed to dump JSON/YAML, PHP (like
-L<Data::Dump::PHP>), or Ruby (like L<Data::Dump::Ruby>). I also want to support
-more advanced features, e.g.: highlighting some parts of data (certain escape
-sequences in strings, etc), hiding some other parts of data, different brace
-colors for different levels, and so on.
+L<Data::Dump::Color> (colors, comments to aid debugging) in a single codebase,
+and more. It should also be flexible enough to be subclassed to dump JSON/YAML,
+PHP (like L<Data::Dump::PHP>), or Ruby (like L<Data::Dump::Ruby>). I also want
+to support more advanced features, e.g.: highlighting some parts of data
+(certain escape sequences in strings, etc), hiding some other parts of data,
+different brace colors for different levels, and so on.
 
 Of course, the basics like handling of circular references, coderefs, Regexp
 objects, etc are supported.
@@ -223,17 +260,39 @@ About the module name: bahé is a Sundanese word meaning "to spill out" or "to
 pour" (liquid).
 
 
+=head1 FUNCTIONS
+
+=head2 dd
+
+Usage:
+
+ dd @data;
+ my @data = dd somefunc($args); # can be inserted in the middle of expression
+
+Exported by default. Print dump of data to STDOUT. Return the original arguments
+so you can insert "dd" in the middle of expression.
+
+=head2 dump
+
+Usage:
+
+ my $dump_str = dump(@data);
+
+Not exported by default, exportable. Return the dump of data as a string. Output
+nothing to STDOUT/STDERR.
+
+
 =head1 METHODS
 
-=head2 new(%opts) => obj
+=head2 new
 
 Constructor. Known options:
 
 =over
 
-=item *
+=item * perl_version
 
-=item *
+=item * remove_pragmas
 
 =back
 
@@ -249,10 +308,20 @@ Print dumped data and return the original result. A shortcut for:
  return @data;
 
 
+=head1 ENVIRONMENT
+
+=head2 PERL_BAHE_OPTS
+
+String (encoded JSON). Set default options for the constructor. Example:
+
+ {"remove_pragmas":true}
+
+
 =head1 SEE ALSO
 
-L<Data::Dumper>
+Other data dumpers that focus on producing nicer outputs for human:
+L<Data::Dump>, L<Data::Dump::Color>, L<Data::Dumper::Compact>, L<Data::Printer>.
 
-L<Data::Dump>
+L<Data::Dumper>, the venerable and core module for dumping.
 
-L<Data::Dmp>
+L<Acme::CPANModules::DumpingDataForDebugging>
