@@ -5,23 +5,29 @@ package Data::Bahe::ForTerm;
 # DIST
 # VERSION
 
+use 5.010001;
 use Role::Tiny;
 use Role::Tiny::With;
 
 use Color::ANSI::Util qw(ansifg ansibg ansi_reset);
 
+with 'Role::TinyCommons::TermAttr::Color';
 with 'Role::TinyCommons::TermAttr::Size';
-requires 'get_color';
+requires 'get_color'; # from a color theme
 
-around new => sub {
-    my $orig = shift;
-    my $self = $orig->(@_);
-    $self->{right_margin} //= $self->termattr_width;
-    $self;
+before set_default_opts => sub {
+    my $self = shift;
+    $self->{max_width} //= $self->termattr_width;
 };
 
+my $cache_use_color;
 sub colorize {
     my ($self, $r, $str, $color_name) = @_;
+
+    unless (defined $cache_use_color) {
+        $cache_use_color = $self->termattr_use_color // 0;
+    }
+    return $str unless $cache_use_color;
 
     my $color;
 
@@ -48,5 +54,7 @@ sub colorize {
 
 1;
 # ABSTRACT: Methods for when running in terminal
+
+=for Pod::Coverage ^(.+)$
 
 =head1 DESCRIPTION

@@ -19,20 +19,27 @@ use Role::Tiny::With;
 
 use Scalar::Util qw(looks_like_number blessed reftype refaddr);
 
+sub set_default_opts {
+    my $self = shift;
+
+    $self->{perl_version}   //= "5.010";
+    $self->{remove_pragmas} //= 0;
+    $self->{max_width}      //= 80;
+}
+
 sub new {
     my $class = shift;
     my %opts = @_;
 
     my $self = bless \%opts, $class;
 
-    # we give a chance to users to use other roles, but if they don't then we
-    # mix the defaults
+    # since method from the first mixed-in role "wins", we want to give a chance
+    # to users to mix other roles first. and when they don't, then here's where
+    # we mix in the defaults.
     with 'Data::Bahe::ColorTheme::Default' unless $self->can('get_color');
     with 'Data::Bahe::ForTerm' unless $self->can('colorize');
 
-    # set defaults for options
-    $self->{perl_version}   //= "5.010";
-    $self->{remove_pragmas} //= 0;
+    $self->set_default_opts;
 
     $self;
 }
@@ -314,6 +321,10 @@ Constructor. Known options:
 =item * perl_version
 
 =item * remove_pragmas
+
+=item * max_width
+
+Try producing dump that does not exceed this width.
 
 =back
 
